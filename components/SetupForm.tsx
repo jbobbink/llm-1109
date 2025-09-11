@@ -23,7 +23,7 @@ const providerDetails: Record<Provider, { name: string, requiresKey: boolean, re
 const modelOptions: Partial<Record<Provider, string[]>> = {
     gemini: ['gemini-2.5-flash'],
     openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo'],
-    perplexity: ['llama-3-sonar-large-32k-online', 'llama-3-sonar-small-32k-online', 'sonar', 'sonar pro', 'sonar reasoning', 'sonar reasoning pro', 'sonar deep research', 'r1-1776'],
+    perplexity: ['sonar', 'sonar pro', 'sonar reasoning', 'sonar reasoning pro', 'sonar deep research', 'r1-1776'],
 };
 
 const defaultModels: Partial<Record<Provider, string>> = {
