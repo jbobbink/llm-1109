@@ -29,7 +29,7 @@ const modelOptions: Partial<Record<Provider, string[]>> = {
 const defaultModels: Partial<Record<Provider, string>> = {
     gemini: 'gemini-2.5-flash',
     openai: 'gpt-4o-mini',
-    perplexity: 'llama-3-sonar-large-32k-online',
+    perplexity: 'sonar',
     copilot: 'gpt-4o'
 };
 
