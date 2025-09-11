@@ -17,7 +17,7 @@ const providerDetails: Record<Provider, { name: string, requiresKey: boolean, re
     gemini: { name: 'Google Gemini', requiresKey: true },
     openai: { name: 'OpenAI', requiresKey: true },
     perplexity: { name: 'Perplexity', requiresKey: true },
-    copilot: { name: 'Copilot / Azure', requiresKey: true, requiresEndpoint: true },
+    copilot: { name: 'Copilot', requiresKey: true, requiresEndpoint: true },
 };
 
 const modelOptions: Partial<Record<Provider, string[]>> = {
