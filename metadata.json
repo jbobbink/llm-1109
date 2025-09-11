@@ -1,0 +1,5 @@
+{
+  "name": "V2 of LLM Search Visibility Tracker",
+  "description": "An application to track and analyze brand visibility within responses from Large Language Models. It analyzes mentions, sentiment, and answers specific questions based on LLM outputs for a client and their competitors.",
+  "requestFramePermissions": []
+}
