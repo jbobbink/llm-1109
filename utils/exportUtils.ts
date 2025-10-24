@@ -1,47 +1,10 @@
 import type { AnalysisResult, AppConfig, Provider } from '../types';
 
-const PASTE_API_URL = 'https://dpaste.com/api/';
-
-/**
- * Creates a hosted, shareable report by creating an anonymous dpaste.
- * @param htmlContent The full HTML content of the report.
- * @param clientName The name of the client for the report title.
- * @returns A promise that resolves with the URL of the created paste.
- */
-export async function createHostedReport(htmlContent: string, clientName: string): Promise<string> {
-    try {
-        const formData = new URLSearchParams();
-        formData.append('content', htmlContent);
-        formData.append('syntax', 'html');
-        formData.append('title', `LLM Visibility Report for ${clientName}`);
-
-        const response = await fetch(PASTE_API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: formData.toString(),
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`dpaste.com API Error (${response.status}): ${errorText || 'Failed to create paste'}`);
-        }
-
-        const pasteUrl = await response.text();
-        return pasteUrl.trim();
-    } catch (error) {
-        console.error('Failed to create shareable link:', error);
-        throw new Error('Could not create a shareable link. This might be due to network issues or API rate limiting.');
-    }
-}
-
-
 const providerBaseNames: Record<Provider, string> = {
     gemini: 'Google Gemini',
     openai: 'OpenAI',
+    'openai-websearch': 'OpenAI Web Search',
     perplexity: 'Perplexity',
-    copilot: 'Copilot / Azure'
 };
 
 const getProviderNameWithModel = (provider: Provider, config: AppConfig): string => {
@@ -52,29 +15,42 @@ const getProviderNameWithModel = (provider: Provider, config: AppConfig): string
 function getStyles(): string {
     return `
 <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #111827; color: #e5e7eb; margin: 0; padding: 2rem; }
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&display=swap');
+    body { 
+        font-family: 'Manrope', sans-serif; 
+        background-color: #111827; 
+        color: #f3f4f6; 
+        margin: 0; 
+        padding: 2rem; 
+    }
     .container { max-width: 1200px; margin: auto; }
-    h1, h2, h3 { color: #4ade80; }
+    h1, h2, h3 { color: #a3e635; }
     h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
     h2 { font-size: 2rem; border-bottom: 2px solid #374151; padding-bottom: 0.5rem; margin-top: 3rem; }
     h3 { font-size: 1.5rem; }
+    a { color: #a3e635; text-decoration: underline; }
+    a:hover { text-decoration: none; }
     .card { background-color: #1f2937; border: 1px solid #374151; border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem; }
     table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
     th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #374151; }
     th { background-color: #374151; color: #d1d5db; }
-    .client-row { background-color: rgba(74, 222, 128, 0.1); }
-    .client-name { color: #4ade80; font-weight: bold; }
+    .client-row { background-color: #365314; }
+    .client-name { color: #a3e635; font-weight: bold; }
     .prompt { font-style: italic; color: #9ca3af; margin-bottom: 1rem; }
     .response-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; }
-    .provider-response { background-color: #374151; padding: 1rem; border-radius: 0.5rem; }
-    .provider-response h4 { margin-top: 0; color: #6ee7b7; }
-    .response-content { background-color: #111827; padding: 1rem; border-radius: 0.25rem; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; }
-    .sentiment-Positive { color: #34d399; }
+    .provider-response { background-color: #111827; padding: 1rem; border-radius: 0.5rem; border: 1px solid #374151; }
+    .provider-response h4 { margin-top: 0; color: #a3e635; }
+    .response-content { background-color: #000; border: 1px solid #374151; padding: 1rem; border-radius: 0.25rem; white-space: pre-wrap; word-wrap: break-word; }
+    .response-content a, .card table a { color: #a3e635; text-decoration: underline; }
+    .response-content a:hover, .card table a:hover { color: #bef264; }
+    .sentiment-Positive { color: #4ade80; }
     .sentiment-Negative { color: #f87171; }
-    .sentiment-Neutral { color: #9ca3af; }
+    .sentiment-Neutral { color: #d1d5db; }
     .sentiment-Not-Mentioned { color: #6b7280; }
-    .discovered-label { margin-left: 8px; font-size: 0.75rem; font-weight: 600; color: #facc15; letter-spacing: 0.025em; vertical-align: middle; }
+    .discovered-label { margin-left: 8px; font-size: 0.75rem; font-weight: 600; color: #f59e0b; letter-spacing: 0.025em; vertical-align: middle; }
     .error { color: #f87171; font-weight: bold; }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
 
     /* Accordion Styles */
     .card.accordion-wrapper {
@@ -86,7 +62,7 @@ function getStyles(): string {
         justify-content: space-between;
         align-items: center;
         padding: 1rem 1.5rem;
-        transition: background-color 0.2s ease-in-out;
+        transition: background-color: 0.2s ease-in-out;
     }
     .accordion-header:hover {
         background-color: #374151;
@@ -102,7 +78,7 @@ function getStyles(): string {
         color: #9ca3af;
         margin-left: 1rem;
     }
-    mark { background-color: #facc15; color: #1f2937; padding: 0.1em 0.2em; border-radius: 0.2em; }
+    mark { background-color: #a3e635; color: #111827; padding: 0.1em 0.2em; border-radius: 0.2em; }
 </style>
 `;
 }
@@ -120,17 +96,19 @@ function escapeHtml(unsafe: string): string {
 function generateSummary(results: AnalysisResult[], config: AppConfig): string {
     const totalMentions = results.flatMap(r => r.providerResponses)
         .flatMap(pr => pr.brandAnalyses)
-        .filter(ba => ba.brandName.toLowerCase() === config.clientName.toLowerCase())
+        .filter(ba => ba.brandName && ba.brandName.toLowerCase() === config.clientName.toLowerCase())
         .reduce((sum, ba) => sum + ba.mentions, 0);
 
     return `
 <h2>Executive Summary</h2>
 <div class="card">
     <p>This report details the visibility of the brand "<strong>${escapeHtml(config.clientName)}</strong>" across various Large Language Models (LLMs).</p>
+    ${config.description ? `<p style="margin-top: 1rem; padding: 1rem; background-color: #374151; border-radius: 0.5rem;"><strong>Description:</strong> ${escapeHtml(config.description)}</p>` : ''}
     <ul>
         <li><strong>Client Brand:</strong> ${escapeHtml(config.clientName)}</li>
         <li><strong>Competitors Tracked:</strong> ${escapeHtml(config.competitors.join(', ')) || 'None'}</li>
         <li><strong>LLM Providers Analyzed:</strong> ${config.providers.map(p => escapeHtml(getProviderNameWithModel(p, config))).join(', ')}</li>
+        <li><strong>Brand Matching Strategy:</strong> ${config.broadMatch ? 'Broad' : 'Exact'}</li>
         <li><strong>Total Prompts:</strong> ${config.prompts.length}</li>
         <li><strong>Total Client Mentions:</strong> ${totalMentions}</li>
     </ul>
@@ -199,11 +177,12 @@ function generateComparativeTables(results: AnalysisResult[], config: AppConfig)
         <thead>
             <tr>
                 <th>Brand</th>
-                ${config.providers.map(p => `<th style="text-align: right;">${escapeHtml(getProviderNameWithModel(p, config))}</th>`).join('')}
+                ${config.providers.map(p => `<th class="text-right">${escapeHtml(getProviderNameWithModel(p, config))}</th>`).join('')}
             </tr>
         </thead>
         <tbody>
             ${brandMentionsData.map(d => {
+                if (!d.brandName) return ''; // FIX: Add guard to prevent crash on undefined brandName.
                 const isKnown = knownBrandsLower.has(d.brandName.toLowerCase());
                 return `
                 <tr class="${d.brandName.toLowerCase() === config.clientName.toLowerCase() ? 'client-row' : ''}">
@@ -211,7 +190,7 @@ function generateComparativeTables(results: AnalysisResult[], config: AppConfig)
                         ${escapeHtml(d.brandName)}
                         ${!isKnown ? `<span class="discovered-label">(Discovered)</span>` : ''}
                     </td>
-                    ${config.providers.map(p => `<td style="text-align: right;">${d.mentions[p] || 0}</td>`).join('')}
+                    ${config.providers.map(p => `<td class="text-right">${d.mentions[p] || 0}</td>`).join('')}
                 </tr>
             `}).join('')}
         </tbody>
@@ -225,14 +204,19 @@ function generateComparativeTables(results: AnalysisResult[], config: AppConfig)
         <thead>
             <tr>
                 <th rowspan="2">Brand</th>
-                ${config.providers.map(p => `<th colspan="3" style="text-align: center;">${escapeHtml(getProviderNameWithModel(p, config))}</th>`).join('')}
+                ${config.providers.map(p => `<th colspan="3" class="text-center">${escapeHtml(getProviderNameWithModel(p, config))}</th>`).join('')}
             </tr>
             <tr>
-                ${config.providers.map(() => `<th style="text-align: center;">Pos</th><th style="text-align: center;">Neu</th><th style="text-align: center;">Neg</th>`).join('')}
+                ${config.providers.map(() => `
+                    <th class="text-center sentiment-Positive">Positive</th>
+                    <th class="text-center sentiment-Neutral">Neutral</th>
+                    <th class="text-center sentiment-Negative">Negative</th>
+                `).join('')}
             </tr>
         </thead>
         <tbody>
             ${brandMentionsData.map(brandData => {
+                if (!brandData.brandName) return ''; // FIX: Add guard to prevent crash on undefined brandName.
                 const lowerCaseBrand = brandData.brandName.toLowerCase();
                 const sentimentData = sentimentMap.get(lowerCaseBrand);
                 const isKnown = knownBrandsLower.has(lowerCaseBrand);
@@ -246,9 +230,9 @@ function generateComparativeTables(results: AnalysisResult[], config: AppConfig)
                     ${config.providers.map(p => {
                         const s = sentimentData?.sentiments[p] || { P: 0, Nl: 0, N: 0 };
                         return `
-                            <td class="sentiment-Positive" style="text-align: center;">${s.P}</td>
-                            <td class="sentiment-Neutral" style="text-align: center;">${s.Nl}</td>
-                            <td class="sentiment-Negative" style="text-align: center;">${s.N}</td>
+                            <td class="text-center sentiment-Positive">${s.P}</td>
+                            <td class="text-center sentiment-Neutral">${s.Nl}</td>
+                            <td class="text-center sentiment-Negative">${s.N}</td>
                         `;
                     }).join('')}
                 </tr>
@@ -262,15 +246,61 @@ function generateComparativeTables(results: AnalysisResult[], config: AppConfig)
 }
 
 function generateIndividualResponses(results: AnalysisResult[], config: AppConfig): string {
+    
+    const renderCitations = (pResponse: AnalysisResult['providerResponses'][0]): string => {
+        if (!pResponse.citations || pResponse.citations.length === 0) return '';
+
+        let content = '';
+        if (pResponse.provider === 'perplexity') {
+            content = `
+                <ol style="margin: 0; padding-left: 1.5rem; list-style-type: decimal;">
+                    ${pResponse.citations.sort((a,b) => a.index - b.index).map(citation => `
+                        <li style="margin-bottom: 0.5rem; word-break: break-all;">
+                            <a href="${escapeHtml(citation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(citation.url)}</a>
+                        </li>
+                    `).join('')}
+                </ol>
+            `;
+        } else { // For openai-websearch and any future providers
+            content = `
+                <table style="width: 100%; font-size: 0.9em;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #374151;">
+                            <th style="padding: 0.5rem; text-align: left;">Title</th>
+                            <th style="padding: 0.5rem; text-align: left;">URL</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    ${pResponse.citations.sort((a,b) => a.index - b.index).map(citation => `
+                        <tr style="border-bottom: 1px solid #1f2937;">
+                            <td style="padding: 0.5rem; vertical-align: top;">${escapeHtml(citation.title && citation.title.trim() ? citation.title : 'N/A')}</td>
+                            <td style="padding: 0.5rem; vertical-align: top; word-break: break-all;">
+                                <a href="${escapeHtml(citation.url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(citation.url)}">
+                                    ${escapeHtml(citation.url)}
+                                </a>
+                            </td>
+                        </tr>
+                    `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        return `
+            <h5 style="margin-top: 1rem;">Citations</h5>
+            <div class="response-content">${content}</div>
+        `;
+    };
+
     return `
 <h2>Individual Prompt Responses</h2>
 <div class="card">
-    <input type="search" id="responseSearch" placeholder="Search prompts and responses..." style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid #4a5568; background-color: #374151; color: #e5e7eb; font-size: 1rem;">
+    <input type="search" id="responseSearch" placeholder="Search prompts and responses..." style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid #4b5563; background-color: #374151; color: #f3f4f6; font-size: 1rem;">
 </div>
 ${results.map((result, index) => `
 <div class="card accordion-wrapper prompt-card-wrapper">
     <div class="accordion-header">
-        <h4 class="prompt-header-text" style="margin: 0; flex-grow: 1; color: #e5e7eb; font-size: 1.1rem;">Prompt ${index + 1}: <span style="font-weight: normal; font-style: italic; color: #d1d5db;">${escapeHtml(result.prompt)}</span></h4>
+        <h4 class="prompt-header-text" style="margin: 0; flex-grow: 1; color: #a3e635; font-size: 1.1rem;">Prompt ${index + 1}: <span style="font-weight: normal; font-style: italic; color: #d1d5db;">${escapeHtml(result.prompt)}</span></h4>
         <span class="indicator">[+]</span>
     </div>
     <div class="accordion-content">
@@ -294,6 +324,7 @@ ${results.map((result, index) => `
                     `).join('')}
                     </tbody>
                 </table>
+                ${renderCitations(pResponse)}
                 `}
             </div>
             `).join('')}
@@ -312,12 +343,12 @@ function generateAdditionalQuestions(results: AnalysisResult[], config: AppConfi
 ${config.additionalQuestions.map((question, qIndex) => `
 <div class="card accordion-wrapper">
      <div class="accordion-header">
-        <h4 style="margin: 0; flex-grow: 1; color: #e5e7eb; font-size: 1.1rem;">Question ${qIndex + 1}: <span style="font-weight: normal; font-style: italic; color: #d1d5db;">${escapeHtml(question)}</span></h4>
+        <h4 style="margin: 0; flex-grow: 1; color: #a3e635; font-size: 1.1rem;">Question ${qIndex + 1}: <span style="font-weight: normal; font-style: italic; color: #d1d5db;">${escapeHtml(question)}</span></h4>
         <span class="indicator">[+]</span>
     </div>
     <div class="accordion-content">
     ${results.map((result, i) => `
-    <div style="margin-top: ${i === 0 ? '0' : '1.5rem'}; border-top: ${i === 0 ? 'none' : `1px solid #4a5568`}; padding-top: ${i === 0 ? '0' : '1.5rem'};">
+    <div style="margin-top: ${i === 0 ? '0' : '1.5rem'}; border-top: ${i === 0 ? 'none' : `1px solid #374151`}; padding-top: ${i === 0 ? '0' : '1.5rem'};">
         <p><strong>Regarding Prompt:</strong> <span class="prompt">"${escapeHtml(result.prompt)}"</span></p>
         <div class="response-container">
             ${result.providerResponses.map(pResponse => {
@@ -336,6 +367,63 @@ ${config.additionalQuestions.map((question, qIndex) => `
 </div>
 `).join('')}
 `;
+}
+
+function generateAllCitationsTable(results: AnalysisResult[], config: AppConfig): string {
+    const citationMap = new Map<string, { title?: string; url: string; count: number }>();
+
+    results.forEach(result => {
+        result.providerResponses.forEach(pResponse => {
+            if (pResponse.citations && pResponse.citations.length > 0) {
+                pResponse.citations.forEach(citation => {
+                    const baseUrl = citation.url.split('?')[0];
+                    if (citationMap.has(baseUrl)) {
+                        const existing = citationMap.get(baseUrl)!;
+                        existing.count += 1;
+                    } else {
+                        citationMap.set(baseUrl, {
+                            title: citation.title,
+                            url: baseUrl,
+                            count: 1,
+                        });
+                    }
+                });
+            }
+        });
+    });
+
+    if (citationMap.size === 0) {
+        return '';
+    }
+    
+    const aggregatedCitations = Array.from(citationMap.values()).sort((a, b) => b.count - a.count);
+
+    return `
+        <h2>Citation Summary</h2>
+        <div class="card">
+            <p style="color: #9ca3af; margin-top: 0;">A summary of all unique sources cited by web-enabled providers, sorted by frequency.</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>URL</th>
+                        <th class="text-right">Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${aggregatedCitations.map(citation => `
+                        <tr>
+                            <td style="max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                <a href="${escapeHtml(citation.url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(citation.url)}">
+                                    ${escapeHtml(citation.url)}
+                                </a>
+                            </td>
+                            <td class="text-right">${citation.count}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
 }
 
 export function generateHtmlReport(results: AnalysisResult[], config: AppConfig): string {
@@ -416,12 +504,17 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 `;
     const logoSvg = `
-    <svg aria-label="TRAVYK Logo" height="36" viewBox="0 0 180 32" xmlns="http://www.w3.org/2000/svg" style="margin-bottom: 1rem;">
-        <text x="0" y="26" font-family="system-ui, sans-serif" font-size="32" font-weight="800" letter-spacing="-2" fill="#e5e7eb">
-            TRAVY
-        </text>
-        <text x="98" y="26" font-family="system-ui, sans-serif" font-size="32" font-weight="800" letter-spacing="-2" fill="#4ade80">
-            K
+    <svg aria-label="Travyk Logo" height="36" viewBox="0 0 130 32" xmlns="http://www.w3.org/2000/svg" style="margin-bottom: 1rem;">
+        <text
+            x="0"
+            y="26"
+            font-family="'Manrope', sans-serif"
+            font-size="32"
+            font-weight="800"
+            letter-spacing="-1.5"
+            fill="#a3e635"
+        >
+            travyk
         </text>
     </svg>`;
 
@@ -444,6 +537,7 @@ document.addEventListener('DOMContentLoaded', function() {
         ${generateComparativeTables(results, config)}
         ${generateIndividualResponses(results, config)}
         ${generateAdditionalQuestions(results, config)}
+        ${generateAllCitationsTable(results, config)}
         
     </div>
     ${script}

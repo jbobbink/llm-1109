@@ -4,8 +4,8 @@ import type { AnalysisResult, Provider } from '../types';
 const providerNames: Record<Provider, string> = {
     gemini: 'Google Gemini',
     openai: 'OpenAI',
+    'openai-websearch': 'OpenAI Web Search',
     perplexity: 'Perplexity',
-    copilot: 'Copilot / Azure'
 };
 
 interface SummaryCardsProps {
@@ -16,10 +16,10 @@ interface SummaryCardsProps {
 
 const StatCard: React.FC<{ title: string; value: string | number; description: string; icon: React.ReactNode }> = ({ title, value, description, icon }) => (
     <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 flex items-start space-x-4">
-        <div className="bg-gray-700 p-3 rounded-lg text-green-400">{icon}</div>
+        <div className="bg-green-900/50 p-3 rounded-lg text-green-400">{icon}</div>
         <div>
             <p className="text-sm text-gray-400">{title}</p>
-            <p className="text-3xl font-bold">{value}</p>
+            <p className="text-3xl font-bold text-gray-100">{value}</p>
             <p className="text-xs text-gray-500">{description}</p>
         </div>
     </div>
@@ -46,14 +46,14 @@ const SearchIcon = () => (
 
 export const SummaryCards: React.FC<SummaryCardsProps> = ({ results, clientName, providers }) => {
     
-    const clientMentionsByProvider: Record<Provider, number> = { gemini: 0, openai: 0, perplexity: 0, copilot: 0 };
+    const clientMentionsByProvider: Partial<Record<Provider, number>> = {};
     let totalClientMentions = 0;
 
     results.forEach(result => {
         result.providerResponses.forEach(pResponse => {
             pResponse.brandAnalyses.forEach(analysis => {
-                if (analysis.brandName.toLowerCase() === clientName.toLowerCase()) {
-                    clientMentionsByProvider[pResponse.provider] += analysis.mentions;
+                if (analysis.brandName && analysis.brandName.toLowerCase() === clientName.toLowerCase()) {
+                    clientMentionsByProvider[pResponse.provider] = (clientMentionsByProvider[pResponse.provider] || 0) + analysis.mentions;
                 }
             });
         });
@@ -66,8 +66,9 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ results, clientName,
 
     if (providers.length > 0) {
         for (const provider of providers) {
-            if (clientMentionsByProvider[provider] > maxMentions) {
-                maxMentions = clientMentionsByProvider[provider];
+            const mentions = clientMentionsByProvider[provider] || 0;
+            if (mentions > maxMentions) {
+                maxMentions = mentions;
                 topProvider = provider;
             }
         }
